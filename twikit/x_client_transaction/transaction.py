@@ -12,8 +12,9 @@ from .interpolate import interpolate
 from .rotation import convert_rotation_to_matrix
 from .utils import float_to_hex, is_odd, base64_encode, handle_x_migration
 
-ON_DEMAND_FILE_REGEX = re.compile(
-    r"""['|\"]{1}ondemand\.s['|\"]{1}:\s*['|\"]{1}([\w]*)['|\"]{1}""", flags=(re.VERBOSE | re.MULTILINE))
+ON_DEMAND_FILE_REGEX: re.Pattern = re.compile(
+    r""",(\d+):["']ondemand\.s["']""", flags=(re.VERBOSE | re.MULTILINE))
+ON_DEMAND_HASH_PATTERN: str = r',{}:\"([0-9a-f]+)\"'
 INDICES_REGEX = re.compile(
     r"""(\(\w{1}\[(\d{1,2})\],\s*16\))+""", flags=(re.VERBOSE | re.MULTILINE))
 
@@ -42,16 +43,35 @@ class ClientTransaction:
         key_byte_indices = []
         response = self.validate_response(
             home_page_response) or self.home_page_response
-        on_demand_file = ON_DEMAND_FILE_REGEX.search(str(response))
-        if on_demand_file:
-            on_demand_file_url = f"https://abs.twimg.com/responsive-web/client-web/ondemand.s.{on_demand_file.group(1)}a.js"
-            on_demand_file_response = await session.request(method="GET", url=on_demand_file_url, headers=headers)
-            key_byte_indices_match = INDICES_REGEX.finditer(
-                str(on_demand_file_response.text))
-            for item in key_byte_indices_match:
-                key_byte_indices.append(item.group(2))
+
+        # 优化1：只进行一次字符串转换，节省内存和 CPU
+        response_str = str(response)
+
+        # 优化2：分步校验，防止 AttributeError 崩溃
+        index_match = ON_DEMAND_FILE_REGEX.search(response_str)
+
+        if index_match:
+            on_demand_file_index = index_match.group(1)
+
+            # 动态编译获取 Hash 的正则
+            hash_regex = re.compile(ON_DEMAND_HASH_PATTERN.format(on_demand_file_index))
+            hash_match = hash_regex.search(response_str)
+
+            if hash_match:
+                filename = hash_match.group(1)
+                on_demand_file_url = f"https://abs.twimg.com/responsive-web/client-web/ondemand.s.{filename}a.js"
+
+                # 请求对应的 js 文件
+                on_demand_file_response = await session.request(method="GET", url=on_demand_file_url, headers=headers)
+
+                key_byte_indices_match = INDICES_REGEX.finditer(str(on_demand_file_response.text))
+                for item in key_byte_indices_match:
+                    key_byte_indices.append(item.group(2))
+
+        # 无论是在哪一步匹配失败，最终都会走到这里抛出统一格式的 Exception
         if not key_byte_indices:
             raise Exception("Couldn't get KEY_BYTE indices")
+
         key_byte_indices = list(map(int, key_byte_indices))
         return key_byte_indices[0], key_byte_indices[1:]
 
@@ -80,10 +100,11 @@ class ClientTransaction:
         if not frames:
             frames = self.get_frames(response)
         # return list(list(frames[key[5] % 4].children)[0].children)[1].get("d")[9:].split("C")
-        return [[int(x) for x in re.sub(r"[^\d]+", " ", item).strip().split()] for item in list(list(frames[key_bytes[5] % 4].children)[0].children)[1].get("d")[9:].split("C")]
+        return [[int(x) for x in re.sub(r"[^\d]+", " ", item).strip().split()] for item in
+                list(list(frames[key_bytes[5] % 4].children)[0].children)[1].get("d")[9:].split("C")]
 
     def solve(self, value, min_val, max_val, rounding: bool):
-        result = value * (max_val-min_val) / 255 + min_val
+        result = value * (max_val - min_val) / 255 + min_val
         return math.floor(result) if rounding else round(result, 2)
 
     def animate(self, frames, target_time):
@@ -129,7 +150,7 @@ class ClientTransaction:
         # row_index, frame_time = [key_bytes[2] % 16, key_bytes[2] % 16 * (key_bytes[42] % 16) * (key_bytes[45] % 16)]
 
         row_index = key_bytes[self.DEFAULT_ROW_INDEX] % 16
-        frame_time = reduce(lambda num1, num2: num1*num2,
+        frame_time = reduce(lambda num1, num2: num1 * num2,
                             [key_bytes[index] % 16 for index in self.DEFAULT_KEY_BYTES_INDICES])
         arr = self.get_2d_array(key_bytes, response)
         frame_row = arr[row_index]
@@ -138,7 +159,8 @@ class ClientTransaction:
         animation_key = self.animate(frame_row, target_time)
         return animation_key
 
-    def generate_transaction_id(self, method: str, path: str, response=None, key=None, animation_key=None, time_now=None):
+    def generate_transaction_id(self, method: str, path: str, response=None, key=None, animation_key=None,
+                                time_now=None):
         time_now = time_now or math.floor(
             (time.time() * 1000 - 1682924400 * 1000) / 1000)
         time_now_bytes = [(time_now >> (i * 8)) & 0xFF for i in range(4)]
@@ -153,7 +175,7 @@ class ClientTransaction:
         hash_bytes = list(hash_val)
         random_num = random.randint(0, 255)
         bytes_arr = [*key_bytes, *time_now_bytes, *
-                     hash_bytes[:16], self.ADDITIONAL_RANDOM_NUMBER]
+        hash_bytes[:16], self.ADDITIONAL_RANDOM_NUMBER]
         out = bytearray(
             [random_num, *[item ^ random_num for item in bytes_arr]])
         return base64_encode(out).strip("=")
