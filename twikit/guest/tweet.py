@@ -156,10 +156,10 @@ class Tweet:
                 self.full_text = text_list[0]
 
             entity_set = note_tweet_results[0]['result']['entity_set']
-            self.urls: list = entity_set.get('urls')
+            self.urls: list = entity_set.get('urls', [])
             hashtags = entity_set.get('hashtags', [])
         else:
-            self.urls: list = legacy['entities'].get('urls')
+            self.urls: list = legacy['entities'].get('urls', [])
             hashtags = legacy['entities'].get('hashtags', [])
 
         self.hashtags: list[str] = [

@@ -2,3 +2,5 @@
 /*.py
 /node_modules
 /.env
+/.venv
+/.idea
