@@ -15,7 +15,8 @@ from ..constants import (
     TWEET_RESULT_BY_REST_ID_FEATURES,
     TWEET_RESULTS_BY_REST_IDS_FEATURES,
     USER_FEATURES,
-    USER_HIGHLIGHTS_TWEETS_FEATURES
+    USER_HIGHLIGHTS_TWEETS_FEATURES,
+    SEARCH_TIMELINE_FEATURES
 )
 from ..utils import flatten_params, get_query_id
 
@@ -31,7 +32,7 @@ class Endpoint:
     def url(path):
         return f'https://{DOMAIN}/i/api/graphql/{path}'
 
-    SEARCH_TIMELINE = url('flaR-PUMshxFWZWPNpq4zA/SearchTimeline')
+    SEARCH_TIMELINE = url('3fEctOs2-FvTB7_mvm1hrQ/SearchTimeline')
     SIMILAR_POSTS = url('EToazR74i0rJyZYalfVEAQ/SimilarPosts')
     CREATE_NOTE_TWEET = url('iCUB42lIfXf9qPKctjE5rQ/CreateNoteTweet')
     CREATE_TWEET = url('SiM_cAu83R0wnrpmKQQSEw/CreateTweet')
@@ -152,11 +153,13 @@ class GQLClient:
             'rawQuery': query,
             'count': count,
             'querySource': 'typed_query',
-            'product': product
+            'product': product,
+            'withGrokTranslatedBio': False,
+            'withQuickPromoteEligibilityTweetFields': False
         }
         if cursor is not None:
             variables['cursor'] = cursor
-        return await self.gql_get(Endpoint.SEARCH_TIMELINE, variables, FEATURES)
+        return await self.gql_get(Endpoint.SEARCH_TIMELINE, variables, SEARCH_TIMELINE_FEATURES)
 
     async def similar_posts(self, tweet_id: str):
         variables = {'tweet_id': tweet_id}

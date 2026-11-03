@@ -1,6 +1,7 @@
 *.json
-/*.py
+/tests
 /node_modules
 /.env
 /.venv
 /.idea
+*.pyc
