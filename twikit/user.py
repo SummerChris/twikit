@@ -88,41 +88,57 @@ class User:
 
     def __init__(self, client: Client, data: dict) -> None:
         self._client = client
-        legacy = data.get('legacy', {})
+        self._data = data
+        legacy = data.get('legacy', {}) or {}
+        core = data.get('core', {}) or {}
 
         self.id: str = data.get('rest_id', '')
-        self.created_at: str = legacy.get('created_at', '')
-        self.name: str = legacy.get('name', '')
-        self.screen_name: str = legacy.get('screen_name', '')
-        self.profile_image_url: str = legacy.get('profile_image_url_https', '')
-        self.profile_banner_url: str = legacy.get('profile_banner_url')
-        self.url: str = legacy.get('url')
-        self.location: str = legacy.get('location', '')
-        self.description: str = legacy.get('description', '')
+        self.created_at: str = legacy.get('created_at') or core.get('created_at', '')
+        self.name: str = legacy.get('name') or core.get('name', '')
+        self.screen_name: str = legacy.get('screen_name') or core.get('screen_name', '')
+        
+        avatar_dict = data.get('avatar', {}) or {}
+        self.profile_image_url: str = avatar_dict.get('image_url') or legacy.get('profile_image_url_https', '')
+        
+        banner_dict = data.get('banner', {}) or {}
+        self.profile_banner_url: str = banner_dict.get('image_url') or legacy.get('profile_banner_url')
+        
+        self.url: str = legacy.get('url') or data.get('website', {}).get('url')
+        
+        loc_val = data.get('location')
+        if isinstance(loc_val, dict):
+            self.location: str = loc_val.get('location', '')
+        else:
+            self.location: str = loc_val or legacy.get('location', '')
+
+        bio_dict = data.get('profile_bio', {}) or {}
+        self.description: str = bio_dict.get('description') or legacy.get('description', '')
         self.description_urls: list = legacy.get('entities', {}).get('description', {}).get('urls', [])
         self.urls: list = legacy.get('entities', {}).get('url', {}).get('urls', [])
         self.pinned_tweet_ids: list[str] = legacy.get('pinned_tweet_ids_str', [])
         self.is_blue_verified: bool = data.get('is_blue_verified', False)
-        self.verified: bool = legacy.get('verified', False)
+        self.verified: bool = legacy.get('verified', False) or data.get('verification', {}).get('verified', False)
         self.possibly_sensitive: bool = legacy.get('possibly_sensitive', False)
         self.can_dm: bool = legacy.get('can_dm', False)
-        self.can_media_tag: bool = legacy.get('can_media_tag', False)
+        self.can_media_tag: bool = legacy.get('can_media_tag', False) or data.get('media_permissions', {}).get('can_media_tag', False)
         self.want_retweets: bool = legacy.get('want_retweets', False)
         self.default_profile: bool = legacy.get('default_profile', False)
         self.default_profile_image: bool = legacy.get('default_profile_image', False)
         self.has_custom_timelines: bool = legacy.get('has_custom_timelines', False)
-        self.followers_count: int = legacy.get('followers_count', 0)
+
+        rel_counts = data.get('relationship_counts', {}) or {}
+        self.followers_count: int = rel_counts.get('followers') or legacy.get('followers_count', 0)
         self.fast_followers_count: int = legacy.get('fast_followers_count', 0)
         self.normal_followers_count: int = legacy.get('normal_followers_count', 0)
-        self.following_count: int = legacy.get('friends_count', 0)
-        self.favourites_count: int = legacy.get('favourites_count', 0)
+        self.following_count: int = rel_counts.get('following') or legacy.get('friends_count', 0)
+        self.favourites_count: int = data.get('action_counts', {}).get('favorites_count') or legacy.get('favourites_count', 0)
         self.listed_count: int = legacy.get('listed_count', 0)
-        self.media_count = legacy.get('media_count', 0)
-        self.statuses_count: int = legacy.get('statuses_count', 0)
+        self.media_count = data.get('tweet_counts', {}).get('media_tweets') or legacy.get('media_count', 0)
+        self.statuses_count: int = data.get('tweet_counts', {}).get('tweets') or legacy.get('statuses_count', 0)
         self.is_translator: bool = legacy.get('is_translator', False)
         self.translator_type: str = legacy.get('translator_type', '')
         self.withheld_in_countries: list[str] = legacy.get('withheld_in_countries', [])
-        self.protected: bool = legacy.get('protected', False)
+        self.protected: bool = data.get('privacy', {}).get('protected') or legacy.get('protected', False)
 
     @property
     def created_at_datetime(self) -> datetime:
